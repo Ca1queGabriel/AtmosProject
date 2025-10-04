@@ -15,9 +15,7 @@ var usersRouter = require('./routes/users');
 }); */
 // view engine setup
 //template de uma requisição
-app.get('/', (req, res) => {
-    res.json({isActive: true})
-});
+
 
 app.set('views', path.join(__dirname, 'views'));
 
