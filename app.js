@@ -10,6 +10,7 @@ var logger = require('morgan');
 var app = express();
 var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
+const apiRouter = require('./routes/api'); // Adiciona o router da API
 const trataDados = require('./scripts/trataDadosClimaticos');
 const arduino = require('./arduino/arduino');
 
@@ -95,6 +96,7 @@ app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/users', usersRouter);
 app.use('/', indexRouter);
+app.use('/api', apiRouter); // Adiciona as rotas da API
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {

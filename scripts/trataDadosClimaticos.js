@@ -277,7 +277,8 @@ function calcularRecomendacoes(dados) {
             fechar_janelas: ultimo.PM25 > LIMITES.PM25 || ultimo.NO2 > LIMITES.NO2,
             ativar_purificador: ultimo.PM25 > 35 || ultimo.O3 > 70,
             usar_mascaras: ultimo.PM25 > 55 || ultimo.CO > LIMITES.CO,
-            'se_hidratar-Controlar_humidade': (ultimaUmidade < LIMITES.UMIDADE_MIN || ultimaUmidade > LIMITES.UMIDADE_MAX) || (nivel_alerta === 'CRÍTICO' || nivel_alerta === 'ALTO')
+            se_hidratar_Controlar_humidade: (ultimaUmidade < LIMITES.UMIDADE_MIN || ultimaUmidade > LIMITES.UMIDADE_MAX) || (nivel_alerta === 'CRÍTICO' || nivel_alerta === 'ALTO'),
+            tempo_categoria: tempo_categoria
         }
     };
 }
@@ -296,20 +297,28 @@ async function atualizarRecomendacoes() {
             console.log(`   IP: ${localizacaoAtual.ip}`);
         }
 
-        const dadosArduino = arduino.obterDados();
+        let dadosArduino = arduino.obterDados();
 
         if (!dadosArduino) {
-            console.warn('⏳ Aguardando dados do Arduino...');
-            return;
+            console.warn('⏳ Arduino não conectado, usando dados simulados para teste.');
+            const now = Date.now();
+            dadosArduino = {
+                timestamp: new Date(now).toISOString(),
+                // Simula 6 leituras para cada poluente, espaçadas por 10 minutos
+                PM25: Array.from({length: 6}, (_, i) => ({ timestamp: new Date(now - i * 600000).toISOString(), valor: 22 + i * 2 })),
+                NO2: Array.from({length: 6}, (_, i) => ({ timestamp: new Date(now - i * 600000).toISOString(), valor: 110 + i * 5 })),
+                O3: Array.from({length: 6}, (_, i) => ({ timestamp: new Date(now - i * 600000).toISOString(), valor: 85 + i * 3 })),
+                CO: Array.from({length: 6}, (_, i) => ({ timestamp: new Date(now - i * 600000).toISOString(), valor: 6 + i })),
+                RH_2m: Array.from({length: 6}, (_, i) => ({ timestamp: new Date(now - i * 600000).toISOString(), valor: 52 + i }))
+            };
         }
-
         // Monta estrutura compatível com calcularRecomendacoes
         const dados = {
-            PM25: [{ timestamp: dadosArduino.timestamp, valor: dadosArduino.pm25 || 0 }],
-            NO2: [{ timestamp: dadosArduino.timestamp, valor: dadosArduino.no2 || 0 }],
-            O3: [{ timestamp: dadosArduino.timestamp, valor: dadosArduino.o3 || 0 }],
-            CO: [{ timestamp: dadosArduino.timestamp, valor: dadosArduino.co || 0 }],
-            RH_2m: [{ timestamp: dadosArduino.timestamp, valor: dadosArduino.umidade || 50 }]
+            PM25: dadosArduino.PM25 || [{ timestamp: dadosArduino.timestamp, valor: dadosArduino.pm25 || 0 }],
+            NO2: dadosArduino.NO2 || [{ timestamp: dadosArduino.timestamp, valor: dadosArduino.no2 || 0 }],
+            O3: dadosArduino.O3 || [{ timestamp: dadosArduino.timestamp, valor: dadosArduino.o3 || 0 }],
+            CO: dadosArduino.CO || [{ timestamp: dadosArduino.timestamp, valor: dadosArduino.co || 0 }],
+            RH_2m: dadosArduino.RH_2m || [{ timestamp: dadosArduino.timestamp, valor: dadosArduino.umidade || 50 }]
         };
 
         ultimaRecomendacao = calcularRecomendacoes(dados);
@@ -495,6 +504,7 @@ module.exports = {
     calcularRecomendacoes,
     calcularHoraPico,
     definirLocalizacao,
+    atualizarRecomendacoes,
     obterLocalizacaoAtual,
     obterCoordenadas,
     detectarLocalizacaoPorIP,
