@@ -257,6 +257,15 @@ function calcularRecomendacoes(dados) {
         (ultimo.CO / LIMITES.CO * 20)
     ));
 
+    // Se o índice estiver PÉSSIMO (>=75), força tempo_categoria = 3 e alerta CRÍTICO
+    if (indiceQualidade >= 75) {
+        tempo_categoria = 3;
+        if (!nivel_alerta || nivel_alerta === 'BOM' || nivel_alerta === 'BAIXO' || nivel_alerta === 'MODERADO') {
+            nivel_alerta = 'CRÍTICO';
+            mensagem_alerta = 'ATENÇÃO: Qualidade do ar em nível CRÍTICO!';
+        }
+    }
+
     return {
         timestamp: new Date().toISOString(),
         nivel_alerta,
