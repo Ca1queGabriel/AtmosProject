@@ -2,7 +2,7 @@
 const trataDados = require('./scripts/trataDadosClimaticos');
 
 // Intervalo de atualização em milissegundos (padrão: 10 minutos = 600000ms)
-const intervaloMs = process.env.INTERVALO_ATUALIZACAO || 10000;
+const intervaloMs = process.env.INTERVALO_ATUALIZACAO || 240000;
 
 // Função que será executada a cada intervalo
 async function executarAtualizacao() {

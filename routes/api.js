@@ -6,16 +6,23 @@ const trataDados = require('../scripts/trataDadosClimaticos');
 /**
  * GET /api/dados-completos
  * ROTA UNIFICADA - Retorna TODOS os dados de uma vez:
- * - Qualidade do ar
- * - Localização atual
- * - Limites de segurança
- * - Status do sistema
+ * - Busca dados FRESCOS da API Meteomatics
+ * - Calcula recomendações
+ * - Retorna qualidade do ar, localização e limites
  */
-router.get('/dados-completos', (req, res) => {
+router.get('/dados-completos', async (req, res) => {
     try {
+        console.log('🔄 Rota /dados-completos chamada - Buscando dados da API Meteomatics...');
+
+        // Chama a função que busca dados da API Meteomatics e atualiza as recomendações
+        await trataDados.atualizarRecomendacoes();
+
+        // Obtém os dados atualizados
         const recomendacoes = trataDados.obterRecomendacoes();
         const localizacao = trataDados.obterLocalizacaoAtual();
         const limites = trataDados.LIMITES;
+
+        console.log('✅ Dados obtidos com sucesso!');
 
         res.json({
             sucesso: true,
@@ -28,6 +35,7 @@ router.get('/dados-completos', (req, res) => {
             }
         });
     } catch (error) {
+        console.error('❌ Erro ao buscar dados:', error.message);
         res.status(500).json({
             sucesso: false,
             erro: error.message

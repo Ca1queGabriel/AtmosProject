@@ -349,5 +349,6 @@ module.exports = {
     definirLocalizacao,
     obterLocalizacaoAtual,
     obterCoordenadas,
+    atualizarRecomendacoes,
     LIMITES
 };

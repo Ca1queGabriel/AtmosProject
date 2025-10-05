@@ -10,11 +10,6 @@ var app = express();
 var indexRouter = require('./routes/index');
 var apiRouter = require('./routes/api');
 
-var backgroundJob = require('./background');
-
-// Inicia o monitoramento automático em background
-backgroundJob.start();
-
 // View engine setup
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'pug');
