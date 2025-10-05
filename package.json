@@ -10,6 +10,7 @@
     "background:dev": "nodemon background.js"
   },
   "dependencies": {
+    "@serialport/parser-readline": "^13.0.0",
     "axios": "^1.12.2",
     "cookie-parser": "~1.4.4",
     "debug": "~2.6.9",

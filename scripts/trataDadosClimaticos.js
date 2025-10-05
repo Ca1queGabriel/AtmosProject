@@ -1,4 +1,5 @@
 const axios = require('axios');
+const arduino = require('../arduino/arduino');
 
 const LIMITES = {
     PM25: 15,  // µg/m³
@@ -234,88 +235,46 @@ function calcularRecomendacoes(dados) {
         umidade_atual: ultimaUmidade,
         previsoes_por_poluente: previsoesPoluentes,
         recomendacoes: {
-            tempo_categoria: tempo_categoria,
             fechar_janelas: ultimo.PM25 > LIMITES.PM25 || ultimo.NO2 > LIMITES.NO2,
             ativar_purificador: ultimo.PM25 > 35 || ultimo.O3 > 70,
             usar_mascaras: ultimo.PM25 > 55 || ultimo.CO > LIMITES.CO,
-            se_hidratar_Controlar_humidade: (ultimaUmidade < LIMITES.UMIDADE_MIN || ultimaUmidade > LIMITES.UMIDADE_MAX) || (nivel_alerta === 'CRÍTICO' || nivel_alerta === 'ALTO')
+            'se_hidratar-Controlar_humidade': (ultimaUmidade < LIMITES.UMIDADE_MIN || ultimaUmidade > LIMITES.UMIDADE_MAX) || (nivel_alerta === 'CRÍTICO' || nivel_alerta === 'ALTO')
         }
     };
 }
 
 /**
- * Busca dados da API e atualiza recomendações
+ * Busca dados do Arduino e atualiza recomendações
  */
 async function atualizarRecomendacoes() {
     try {
-        const agora = new Date();
-        const futuro = new Date(agora.getTime() + 12 * 60 * 60 * 1000);
-        const agoraISO = agora.toISOString();
-        const futuroISO = futuro.toISOString();
+        const dadosArduino = arduino.obterDados();
 
-        // Variáveis corretas da API Meteomatics
-        // PM2.5 em µg/m³, NO2 em µg/m³, O3 em µg/m³, CO em mg/m³, Umidade em %
-        const variaveis = [
-            'pm2p5:ugm3',           // PM2.5 em µg/m³
-            'no2:ugm3',              // NO2 em µg/m³
-            'o3:ugm3',               // O3 em µg/m³
-            'co:ugm3',               // CO em ug/m³
-            'relative_humidity_2m:p'           // Umidade relativa em %
-        ];
-        
-        const url = `https://api.meteomatics.com/${agoraISO}--${futuroISO}:PT1H/${variaveis.join(',')}/${localizacaoAtual.lat},${localizacaoAtual.lon}/json?model=mix`;
-
-        console.log(`Buscando dados da API Meteomatics para: ${localizacaoAtual.nome}...`);
-
-        const response = await axios.get(url, {
-            auth: { username: USERNAME, password: PASSWORD },
-            timeout: 15000
-        });
-
-        // Processa dados da API Meteomatics
-        const dados = {};
-
-        if (response.data && response.data.data) {
-            for (let variavel of response.data.data) {
-                let nome = variavel.parameter;
-
-                // Mapeia nomes da API para nomes internos
-                if (nome.includes('pm2p5') || nome.includes('PM2.5')) nome = 'PM25';
-                else if (nome.includes('no2') || nome.includes('NO2')) nome = 'NO2';
-                else if (nome.includes('o3') || nome.includes('O3')) nome = 'O3';
-                else if (nome.includes('co') || nome.includes('CO')) nome = 'CO';
-                else if (nome.includes('relative_humidity')) nome = 'RH_2m';
-                else continue; // Ignora variáveis não reconhecidas
-
-                // Extrai os dados da estrutura da API
-                if (variavel.coordinates && variavel.coordinates[0] && variavel.coordinates[0].dates) {
-                    dados[nome] = variavel.coordinates[0].dates.map(d => ({
-                        timestamp: d.date,
-                        valor: d.value
-                    }));
-                }
-            }
+        if (!dadosArduino) {
+            console.warn('⏳ Aguardando dados do Arduino...');
+            return;
         }
 
-        // Verifica se conseguiu dados suficientes
-        if (Object.keys(dados).length > 0) {
-            ultimaRecomendacao = calcularRecomendacoes(dados);
-            ultimaRecomendacao.localizacao = localizacaoAtual.nome;
-            console.log(`[${new Date().toLocaleTimeString()}] Recomendação atualizada:`, ultimaRecomendacao);
-        } else {
-            console.warn('Nenhum dado válido recebido da API');
+        // Monta estrutura compatível com calcularRecomendacoes
+        const dados = {
+            PM25: [{ timestamp: dadosArduino.timestamp, valor: dadosArduino.pm25 || 0 }],
+            NO2: [{ timestamp: dadosArduino.timestamp, valor: dadosArduino.no2 || 0 }],
+            O3: [{ timestamp: dadosArduino.timestamp, valor: dadosArduino.o3 || 0 }],
+            CO: [{ timestamp: dadosArduino.timestamp, valor: dadosArduino.co || 0 }],
+            RH_2m: [{ timestamp: dadosArduino.timestamp, valor: dadosArduino.umidade || 50 }]
+        };
+
+        ultimaRecomendacao = calcularRecomendacoes(dados);
+        ultimaRecomendacao.localizacao = 'Local (Arduino)';
+        console.log(`[${new Date().toLocaleTimeString()}] ✅ Recomendação atualizada`);
+
+        // Envia as recomendações de volta para o Arduino
+        if (ultimaRecomendacao.recomendacoes) {
+            arduino.enviarRecomendacoes(ultimaRecomendacao.recomendacoes);
         }
 
     } catch (error) {
-        console.error('Erro ao atualizar recomendação:', error.response?.data || error.message);
-
-        // Mantém última recomendação válida em caso de erro
-        if (!ultimaRecomendacao.valores_atuais) {
-            ultimaRecomendacao = {
-                ...ultimaRecomendacao,
-                erro: 'Dados indisponíveis temporariamente'
-            };
-        }
+        console.error('Erro ao atualizar recomendação:', error.message);
     }
 }
 
@@ -328,17 +287,16 @@ function obterRecomendacoes() {
 
 /**
  * Inicializa o sistema de monitoramento
- * @param {number} intervaloMs - Intervalo em milissegundos para atualizar dados (padrão: 10 minutos)
  */
-async function inicializar(intervaloMs = 10 * 60 * 1000) {
-    console.log('Iniciando sistema de monitoramento de qualidade do ar...');
-    console.log(`Intervalo de atualização: ${intervaloMs}ms (${Math.round(intervaloMs / 1000 / 60)} minutos)`);
+async function inicializar() {
+    console.log('🚀 Iniciando sistema via Arduino...');
+    arduino.conectar();
 
-    // Primeira atualização imediata
-    await atualizarRecomendacoes();
-
-    // Atualiza periodicamente
-    setInterval(atualizarRecomendacoes, intervaloMs);
+    // Aguarda 3 segundos antes da primeira leitura
+    setTimeout(() => {
+        atualizarRecomendacoes();
+        setInterval(atualizarRecomendacoes, 10000); // A cada 10 segundos
+    }, 3000);
 }
 
 module.exports = {
@@ -349,6 +307,5 @@ module.exports = {
     definirLocalizacao,
     obterLocalizacaoAtual,
     obterCoordenadas,
-    atualizarRecomendacoes,
     LIMITES
 };
