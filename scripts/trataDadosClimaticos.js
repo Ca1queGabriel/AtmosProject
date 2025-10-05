@@ -22,12 +22,51 @@ let ultimaRecomendacao = {
 const USERNAME = process.env.METEOMATICS_USER || 'lima_caique';
 const PASSWORD = process.env.METEOMATICS_PASS || 'py01s7YnAEAc14VEM952';
 
-// Localização padrão (será substituída por geocodificação)
-let localizacaoAtual = {
-    nome: process.env.LOCALIZACAO || 'São Paulo, SP, Brasil',
-    lat: '-23.5505',
-    lon: '-46.6333'
-};
+// Localização será detectada automaticamente via IP
+let localizacaoAtual = null;
+
+/**
+ * Detecta automaticamente a localização do usuário usando API de geolocalização por IP
+ * @returns {Promise<Object>} - {nome, lat, lon, cidade, pais, ip}
+ */
+async function detectarLocalizacaoPorIP() {
+    try {
+        // Usando ipapi.co - API gratuita e confiável
+        const response = await axios.get('https://ipapi.co/json/', {
+            timeout: 5000
+        });
+
+        if (response.data) {
+            const dados = response.data;
+            return {
+                nome: `${dados.city}, ${dados.region}, ${dados.country_name}`,
+                lat: dados.latitude.toString(),
+                lon: dados.longitude.toString(),
+                cidade: dados.city,
+                regiao: dados.region,
+                pais: dados.country_name,
+                codigo_pais: dados.country_code,
+                ip: dados.ip
+            };
+        } else {
+            throw new Error('Não foi possível obter dados de localização');
+        }
+    } catch (error) {
+        console.error('Erro ao detectar localização por IP:', error.message);
+        // Fallback para São Paulo caso falhe
+        console.warn('⚠️ Usando localização padrão (São Paulo)');
+        return {
+            nome: 'São Paulo, SP, Brasil',
+            lat: '-23.5505',
+            lon: '-46.6333',
+            cidade: 'São Paulo',
+            regiao: 'SP',
+            pais: 'Brasil',
+            codigo_pais: 'BR',
+            ip: 'desconhecido'
+        };
+    }
+}
 
 /**
  * Converte nome de localização em coordenadas usando API de geocodificação
@@ -248,6 +287,15 @@ function calcularRecomendacoes(dados) {
  */
 async function atualizarRecomendacoes() {
     try {
+        // Detecta localização automaticamente se ainda não foi definida
+        if (!localizacaoAtual) {
+            console.log('🌍 Detectando sua localização...');
+            localizacaoAtual = await detectarLocalizacaoPorIP();
+            console.log(`📍 Localização detectada: ${localizacaoAtual.nome}`);
+            console.log(`   Coordenadas: ${localizacaoAtual.lat}, ${localizacaoAtual.lon}`);
+            console.log(`   IP: ${localizacaoAtual.ip}`);
+        }
+
         const dadosArduino = arduino.obterDados();
 
         if (!dadosArduino) {
@@ -265,7 +313,11 @@ async function atualizarRecomendacoes() {
         };
 
         ultimaRecomendacao = calcularRecomendacoes(dados);
-        ultimaRecomendacao.localizacao = 'Local (Arduino)';
+        ultimaRecomendacao.localizacao = localizacaoAtual.nome;
+        ultimaRecomendacao.coordenadas = {
+            lat: localizacaoAtual.lat,
+            lon: localizacaoAtual.lon
+        };
         console.log(`[${new Date().toLocaleTimeString()}] ✅ Recomendação atualizada`);
 
         // Envia as recomendações de volta para o Arduino
@@ -290,6 +342,18 @@ function obterRecomendacoes() {
  */
 async function inicializar() {
     console.log('🚀 Iniciando sistema via Arduino...');
+
+    // Detecta localização automaticamente na inicialização
+    try {
+        console.log('🌍 Detectando sua localização...');
+        localizacaoAtual = await detectarLocalizacaoPorIP();
+        console.log(`📍 Localização detectada: ${localizacaoAtual.nome}`);
+        console.log(`   Coordenadas: ${localizacaoAtual.lat}, ${localizacaoAtual.lon}`);
+        console.log(`   IP: ${localizacaoAtual.ip}`);
+    } catch (error) {
+        console.error('❌ Erro ao detectar localização:', error.message);
+    }
+
     arduino.conectar();
 
     // Aguarda 3 segundos antes da primeira leitura
@@ -307,5 +371,6 @@ module.exports = {
     definirLocalizacao,
     obterLocalizacaoAtual,
     obterCoordenadas,
+    detectarLocalizacaoPorIP,
     LIMITES
 };
