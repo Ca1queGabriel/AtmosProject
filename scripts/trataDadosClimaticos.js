@@ -237,9 +237,7 @@ function calcularRecomendacoes(dados) {
             fechar_janelas: ultimo.PM25 > LIMITES.PM25 || ultimo.NO2 > LIMITES.NO2,
             ativar_purificador: ultimo.PM25 > 35 || ultimo.O3 > 70,
             usar_mascaras: ultimo.PM25 > 55 || ultimo.CO > LIMITES.CO,
-            controlar_umidade: ultimaUmidade < LIMITES.UMIDADE_MIN || ultimaUmidade > LIMITES.UMIDADE_MAX,
-            se_hidratar: nivel_alerta === 'CRÍTICO' || nivel_alerta === 'ALTO',
-            ventilar_ambiente: ultimo.PM25 < LIMITES.PM25 && ultimo.NO2 < LIMITES.NO2
+            'se_hidratar/Controlar_humidade': (ultimaUmidade < LIMITES.UMIDADE_MIN || ultimaUmidade > LIMITES.UMIDADE_MAX) || (nivel_alerta === 'CRÍTICO' || nivel_alerta === 'ALTO')
         }
     };
 }
@@ -260,7 +258,7 @@ async function atualizarRecomendacoes() {
             'pm2p5:ugm3',           // PM2.5 em µg/m³
             'no2:ugm3',              // NO2 em µg/m³
             'o3:ugm3',               // O3 em µg/m³
-            'co:ugm3',               // CO em mg/m³
+            'co:ugm3',               // CO em ug/m³
             'relative_humidity_2m:p'           // Umidade relativa em %
         ];
         
