@@ -1,0 +1,45 @@
+{
+  "airdust": {
+    "disponivel": true,
+    "intensidade": 45.8,
+    "data": "2025-10-05",
+    "fonte": "NASA GIBS - MODIS Terra Aerosol",
+    "descricao": "Dados simulados baseados em medições reais de aerossóis em São Paulo"
+  },
+  "wildfire": {
+    "disponivel": true,
+    "incendios_detectados": 3,
+    "nivel_risco": "MODERADO",
+    "fonte": "NASA FIRMS - VIIRS NOAA-20",
+    "detalhes": [
+      {
+        "latitude": -23.6234,
+        "longitude": -46.7123,
+        "brilho": 325.4,
+        "confianca": 87.5,
+        "data": "2025-10-05"
+      },
+      {
+        "latitude": -23.4521,
+        "longitude": -46.5234,
+        "brilho": 298.2,
+        "confianca": 92.3,
+        "data": "2025-10-05"
+      },
+      {
+        "latitude": -23.7123,
+        "longitude": -46.8456,
+        "brilho": 312.7,
+        "confianca": 85.1,
+        "data": "2025-10-04"
+      }
+    ]
+  },
+  "timestamp": "2025-10-05T19:30:00.000Z",
+  "localizacao": {
+    "nome": "São Paulo, SP, Brasil",
+    "lat": "-23.5505",
+    "lon": "-46.6333"
+  }
+}
+

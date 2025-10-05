@@ -164,4 +164,52 @@ router.get('/health', (req, res) => {
     });
 });
 
+/**
+ * GET /api/dados-nasa
+ * Retorna dados da NASA (airdust + wildfire) usando localização atual
+ */
+router.get('/dados-nasa', async (req, res) => {
+    try {
+        const local = trataDados.obterLocalizacaoAtual();
+        if (!local || !local.lat || !local.lon) {
+            return res.status(400).json({
+                sucesso: false,
+                erro: 'Localização não definida. Aguarde alguns segundos e tente novamente.'
+            });
+        }
+        const dadosNASA = await trataDados.obterDadosNASA(parseFloat(local.lat), parseFloat(local.lon));
+        res.json({
+            sucesso: true,
+            dados: dadosNASA
+        });
+    } catch (error) {
+        res.status(500).json({
+            sucesso: false,
+            erro: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/localizacao-atual
+ * Retorna a localização atual detectada pelo sistema
+ */
+router.get('/localizacao-atual', (req, res) => {
+    try {
+        const localizacao = trataDados.obterLocalizacaoAtual();
+        if (!localizacao) {
+            return res.status(400).json({
+                sucesso: false,
+                erro: 'Localização ainda não foi detectada. Aguarde alguns segundos.'
+            });
+        }
+        res.json(localizacao);
+    } catch (error) {
+        res.status(500).json({
+            sucesso: false,
+            erro: error.message
+        });
+    }
+});
+
 module.exports = router;
