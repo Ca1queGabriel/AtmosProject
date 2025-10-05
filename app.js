@@ -4,6 +4,7 @@ var express = require('express');
 var climaRouter = require('./routes/clima');
 var path = require('path');
 const axios = require('axios');
+
 var cookieParser = require('cookie-parser');
 var logger = require('morgan');
 var app = express();
@@ -13,6 +14,15 @@ const trataDados = require('./scripts/trataDadosClimaticos');
 
 // Inicializa o sistema de monitoramento
 trataDados.inicializar();
+
+// Executa testes automáticos na inicialização
+(async function() {
+    try {
+        await trataDados.executarTestes();
+    } catch (error) {
+        console.error('Erro ao executar testes:', error.message);
+    }
+})();
 
 app.use('/clima', climaRouter);
 app.get("/teste", (req, res) => {
