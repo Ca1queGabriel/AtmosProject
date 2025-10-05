@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CopilotDiffPersistence">
+    <option name="pendingDiffs">
+      <map>
+        <entry key="$PROJECT_DIR$/.env.example">
+          <value>
+            <PendingDiffInfo>
+              <option name="filePath" value="$PROJECT_DIR$/.env.example" />
+              <option name="originalContent" value="# Credenciais da API Meteomatics&#10;METEOMATICS_USER=seu_usuario_aqui&#10;METEOMATICS_PASS=sua_senha_aqui&#10;&#10;# Localização (nome da cidade ou endereço, não precisa mais de coordenadas!)&#10;LOCALIZACAO=São Paulo, SP, Brasil&#10;# Exemplos:&#10;# LOCALIZACAO=Sorocaba, SP&#10;# LOCALIZACAO=Rio de Janeiro, RJ&#10;# LOCALIZACAO=Campinas" />
+              <option name="updatedContent" value="# Credenciais da API Meteomatics&#10;METEOMATICS_USER=seu_usuario_aqui&#10;METEOMATICS_PASS=sua_senha_aqui&#10;&#10;# Localização (nome da cidade ou endereço, não precisa mais de coordenadas!)&#10;LOCALIZACAO=São Paulo, SP, Brasil&#10;# Exemplos:&#10;# LOCALIZACAO=Sorocaba, SP&#10;# LOCALIZACAO=Rio de Janeiro, RJ&#10;# LOCALIZACAO=Campinas" />
+            </PendingDiffInfo>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+</project>

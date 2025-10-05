@@ -9,11 +9,67 @@ var logger = require('morgan');
 var app = express();
 var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
+const trataDados = require('./scripts/trataDadosClimaticos');
+
+// Inicializa o sistema de monitoramento
+trataDados.inicializar();
 
 app.use('/clima', climaRouter);
 app.get("/teste", (req, res) => {
     res.render('index');
 })
+
+// Rota para obter previsão de qualidade do ar
+app.get('/previsao-ar', (req, res) => {
+    res.json(trataDados.obterRecomendacoes());
+});
+
+// Rota para definir localização (POST ou GET com query param)
+app.post('/localizar', async (req, res) => {
+    try {
+        const local = req.body.local;
+        if (!local) {
+            return res.status(400).json({ erro: 'Parâmetro "local" é obrigatório' });
+        }
+
+        const novaLocalizacao = await trataDados.definirLocalizacao(local);
+        res.json({
+            sucesso: true,
+            mensagem: 'Localização atualizada com sucesso',
+            localizacao: novaLocalizacao
+        });
+    } catch (error) {
+        res.status(400).json({ erro: error.message });
+    }
+});
+
+// Rota alternativa GET para definir localização
+app.get('/localizar', async (req, res) => {
+    try {
+        const local = req.query.local;
+        if (!local) {
+            return res.status(400).json({
+                erro: 'Parâmetro "local" é obrigatório',
+                exemplo: '/localizar?local=Sorocaba, SP'
+            });
+        }
+
+        const novaLocalizacao = await trataDados.definirLocalizacao(local);
+        res.json({
+            sucesso: true,
+            mensagem: 'Localização atualizada com sucesso',
+            localizacao: novaLocalizacao
+        });
+    } catch (error) {
+        res.status(400).json({ erro: error.message });
+    }
+});
+
+// Rota para obter localização atual
+app.get('/localizacao-atual', (req, res) => {
+    res.json(trataDados.obterLocalizacaoAtual());
+});
+
 app.set('views', path.join(__dirname, 'views'));
 
 app.set('view engine', 'pug');
