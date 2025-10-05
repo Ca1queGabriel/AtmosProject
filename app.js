@@ -1,4 +1,3 @@
-console.log("Peixe");
 var createError = require('http-errors');
 var express = require('express');
 var climaRouter = require('./routes/clima');
@@ -10,15 +9,28 @@ var logger = require('morgan');
 var app = express();
 var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
-const apiRouter = require('./routes/api'); // Adiciona o router da API
+const apiRouter = require('./routes/api');
 const trataDados = require('./scripts/trataDadosClimaticos');
 const arduino = require('./arduino/arduino');
+
+
+// Configurações do Express DEVEM vir ANTES das rotas
+app.set('views', path.join(__dirname, 'views'));
+app.set('view engine', 'pug');
+app.use(logger('dev'));
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+app.use(cookieParser());
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Inicializa o sistema de monitoramento
 trataDados.inicializar();
 
-
+// ROTAS - Devem vir DEPOIS das configurações
+app.use('/api', apiRouter);
 app.use('/clima', climaRouter);
+app.use('/users', usersRouter);
+app.use('/', indexRouter);
 
 // Rota para status do Arduino
 app.get('/arduino-status', (req, res) => {
@@ -79,24 +91,11 @@ app.get('/localizar', async (req, res) => {
     }
 });
 
-// Rota para obter localização atual
+// Rota para obter localização atual (DUPLICADA - já existe em /api/localizacao-atual)
 app.get('/localizacao-atual', (req, res) => {
     res.json(trataDados.obterLocalizacaoAtual());
 });
 
-app.set('views', path.join(__dirname, 'views'));
-
-app.set('view engine', 'pug');
-app.use(logger('dev'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
-app.use(cookieParser());
-
-
-app.use(express.static(path.join(__dirname, 'public')));
-app.use('/users', usersRouter);
-app.use('/', indexRouter);
-app.use('/api', apiRouter); // Adiciona as rotas da API
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {

@@ -1,6 +1,5 @@
 const axios = require('axios');
 const arduino = require('../arduino/arduino');
-const os = require('os');
 const fs = require('fs');
 const path = require('path');
 
@@ -22,8 +21,8 @@ let ultimaRecomendacao = {
 };
 
 // Configurações da API Meteomatics
-const USERNAME = process.env.METEOMATICS_USER || 'lima_caique';
-const PASSWORD = process.env.METEOMATICS_PASS || 'py01s7YnAEAc14VEM952';
+const METEOMATICS_USER = process.env.METEOMATICS_USER || 'lima_caique';
+const METEOMATICS_PASS = process.env.METEOMATICS_PASS || 'py01s7YnAEAc14VEM952';
 
 // Localização será detectada automaticamente via IP
 let localizacaoAtual = null;
@@ -300,29 +299,45 @@ async function atualizarRecomendacoes() {
             console.log(`   IP: ${localizacaoAtual.ip}`);
         }
 
-        let dadosArduino = arduino.obterDados();
+        let dados;
 
-        if (!dadosArduino) {
-            console.warn('⏳ Arduino não conectado, usando dados simulados para teste.');
-            const now = Date.now();
-            dadosArduino = {
-                timestamp: new Date(now).toISOString(),
-                // Simula 6 leituras para cada poluente, espaçadas por 10 minutos
-                PM25: Array.from({length: 6}, (_, i) => ({ timestamp: new Date(now - i * 600000).toISOString(), valor: 22 + i * 2 })),
-                NO2: Array.from({length: 6}, (_, i) => ({ timestamp: new Date(now - i * 600000).toISOString(), valor: 110 + i * 5 })),
-                O3: Array.from({length: 6}, (_, i) => ({ timestamp: new Date(now - i * 600000).toISOString(), valor: 85 + i * 3 })),
-                CO: Array.from({length: 6}, (_, i) => ({ timestamp: new Date(now - i * 600000).toISOString(), valor: 6 + i })),
-                RH_2m: Array.from({length: 6}, (_, i) => ({ timestamp: new Date(now - i * 600000).toISOString(), valor: 52 + i }))
+        // PRIORIDADE 1: Tentar buscar dados REAIS da API Meteomatics
+        try {
+            console.log('🔄 Buscando dados REAIS da API Meteomatics...');
+            dados = await buscarDadosMeteomatics(
+                parseFloat(localizacaoAtual.lat),
+                parseFloat(localizacaoAtual.lon)
+            );
+            console.log('✅ Usando dados REAIS da Meteomatics!');
+        } catch (meteomaticsError) {
+            console.warn('⚠️ Meteomatics falhou, tentando Arduino...');
+
+            // PRIORIDADE 2: Tentar dados do Arduino
+            let dadosArduino = arduino.obterDados();
+
+            if (!dadosArduino) {
+                // PRIORIDADE 3: Usar dados simulados como último recurso
+                console.warn('⏳ Arduino não conectado, usando dados simulados para teste.');
+                const now = Date.now();
+                dadosArduino = {
+                    timestamp: new Date(now).toISOString(),
+                    PM25: Array.from({length: 6}, (_, i) => ({ timestamp: new Date(now - i * 600000).toISOString(), valor: 22 + i * 2 })),
+                    NO2: Array.from({length: 6}, (_, i) => ({ timestamp: new Date(now - i * 600000).toISOString(), valor: 110 + i * 5 })),
+                    O3: Array.from({length: 6}, (_, i) => ({ timestamp: new Date(now - i * 600000).toISOString(), valor: 85 + i * 3 })),
+                    CO: Array.from({length: 6}, (_, i) => ({ timestamp: new Date(now - i * 600000).toISOString(), valor: 6 + i })),
+                    RH_2m: Array.from({length: 6}, (_, i) => ({ timestamp: new Date(now - i * 600000).toISOString(), valor: 52 + i }))
+                };
+            }
+
+            // Monta estrutura compatível
+            dados = {
+                PM25: dadosArduino.PM25 || [{ timestamp: dadosArduino.timestamp, valor: dadosArduino.pm25 || 0 }],
+                NO2: dadosArduino.NO2 || [{ timestamp: dadosArduino.timestamp, valor: dadosArduino.no2 || 0 }],
+                O3: dadosArduino.O3 || [{ timestamp: dadosArduino.timestamp, valor: dadosArduino.o3 || 0 }],
+                CO: dadosArduino.CO || [{ timestamp: dadosArduino.timestamp, valor: dadosArduino.co || 0 }],
+                RH_2m: dadosArduino.RH_2m || [{ timestamp: dadosArduino.timestamp, valor: dadosArduino.umidade || 50 }]
             };
         }
-        // Monta estrutura compatível com calcularRecomendacoes
-        const dados = {
-            PM25: dadosArduino.PM25 || [{ timestamp: dadosArduino.timestamp, valor: dadosArduino.pm25 || 0 }],
-            NO2: dadosArduino.NO2 || [{ timestamp: dadosArduino.timestamp, valor: dadosArduino.no2 || 0 }],
-            O3: dadosArduino.O3 || [{ timestamp: dadosArduino.timestamp, valor: dadosArduino.o3 || 0 }],
-            CO: dadosArduino.CO || [{ timestamp: dadosArduino.timestamp, valor: dadosArduino.co || 0 }],
-            RH_2m: dadosArduino.RH_2m || [{ timestamp: dadosArduino.timestamp, valor: dadosArduino.umidade || 50 }]
-        };
 
         ultimaRecomendacao = calcularRecomendacoes(dados);
         ultimaRecomendacao.localizacao = localizacaoAtual.nome;
@@ -568,6 +583,97 @@ async function obterDadosNASA(lat, lon) {
     }
 }
 
+/**
+ * Busca dados de poluição da API Meteomatics
+ * @param {number} lat - Latitude
+ * @param {number} lon - Longitude
+ * @returns {Promise<Object>} - Dados de poluição em múltiplos timestamps
+ */
+async function buscarDadosMeteomatics(lat, lon) {
+    try {
+        console.log(`🌤️ Buscando dados da API Meteomatics para ${lat}, ${lon}`);
+
+        // Timestamps: agora e próximas 5 horas (a cada 1 hora)
+        const now = new Date();
+        const timestamps = [];
+        for (let i = 0; i < 6; i++) {
+            const time = new Date(now.getTime() + i * 3600000); // +1h cada
+            timestamps.push(time.toISOString().replace('.000Z', 'Z'));
+        }
+        const timeStr = timestamps.join(',');
+
+        // Parâmetros CORRETOS testados e funcionando
+        const params = [
+            'pm2p5:ugm3',              // PM2.5
+            'no2:ugm3',                // NO2
+            'o3:ugm3',                 // O3
+            'co:ugm3',                 // CO
+            'relative_humidity_2m:p'   // Umidade
+        ].join(',');
+
+        const url = `https://api.meteomatics.com/${timeStr}/${params}/${lat},${lon}/json`;
+
+        console.log(`🌐 URL Meteomatics: ${url.substring(0, 120)}...`);
+
+        const auth = Buffer.from(`${METEOMATICS_USER}:${METEOMATICS_PASS}`).toString('base64');
+
+        const response = await axios.get(url, {
+            headers: {
+                'Authorization': `Basic ${auth}`
+            },
+            timeout: 15000
+        });
+
+        console.log(`✅ Dados Meteomatics recebidos com sucesso!`);
+
+        // Processa resposta
+        const data = response.data.data;
+        const resultado = {
+            PM25: [],
+            NO2: [],
+            O3: [],
+            CO: [],
+            RH_2m: []
+        };
+
+        // Mapeia os parâmetros CORRETOS da API para nossas chaves
+        const mapeamento = {
+            'pm2p5:ugm3': 'PM25',
+            'no2:ugm3': 'NO2',
+            'o3:ugm3': 'O3',
+            'co:ugm3': 'CO',
+            'relative_humidity_2m:p': 'RH_2m'
+        };
+
+        data.forEach(serie => {
+            const chave = mapeamento[serie.parameter];
+            if (chave) {
+                serie.coordinates[0].dates.forEach(item => {
+                    let valor = item.value;
+
+                    resultado[chave].push({
+                        timestamp: item.date,
+                        valor: valor || 0
+                    });
+                });
+            }
+        });
+
+        console.log(`📊 Dados REAIS processados: PM2.5=${resultado.PM25[0]?.valor.toFixed(1)}, NO2=${resultado.NO2[0]?.valor.toFixed(1)}, O3=${resultado.O3[0]?.valor.toFixed(1)}, CO=${resultado.CO[0]?.valor.toFixed(1)}`);
+
+
+        return resultado;
+
+    } catch (error) {
+        if (error.response && error.response.status === 401) {
+            console.error('❌ Erro de autenticação Meteomatics - Credenciais inválidas!');
+            throw new Error('Autenticação falhou na API Meteomatics. Verifique USERNAME e PASSWORD.');
+        }
+        console.error('❌ Erro ao buscar dados Meteomatics:', error.message);
+        throw error;
+    }
+}
+
 module.exports = {
     inicializar,
     obterRecomendacoes,
@@ -581,5 +687,6 @@ module.exports = {
     LIMITES,
     obterAirdustNASA,
     obterWildfireNASA,
-    obterDadosNASA
+    obterDadosNASA,
+    buscarDadosMeteomatics
 };
