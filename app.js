@@ -11,20 +11,23 @@ var app = express();
 var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
 const trataDados = require('./scripts/trataDadosClimaticos');
+const arduino = require('./arduino/arduino');
 
 // Inicializa o sistema de monitoramento
 trataDados.inicializar();
 
-// Executa testes automáticos na inicialização
-(async function() {
-    try {
-        await trataDados.executarTestes();
-    } catch (error) {
-        console.error('Erro ao executar testes:', error.message);
-    }
-})();
 
 app.use('/clima', climaRouter);
+
+// Rota para status do Arduino
+app.get('/arduino-status', (req, res) => {
+    const dados = arduino.obterDados();
+    res.json({
+        conectado: dados !== null,
+        ultima_leitura: dados
+    });
+});
+
 app.get("/teste", (req, res) => {
     res.render('index');
 })
