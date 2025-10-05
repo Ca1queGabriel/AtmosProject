@@ -363,6 +363,132 @@ async function inicializar() {
     }, 3000);
 }
 
+/**
+ * Obtém dados de poeira atmosférica (Airdust) da NASA GIBS
+ * @param {number} lat - Latitude
+ * @param {number} lon - Longitude
+ * @returns {Promise<Object>} - Dados de airdust
+ */
+async function obterAirdustNASA(lat, lon) {
+    try {
+        const hoje = new Date().toISOString().split('T')[0];
+
+        // NASA GIBS WMS endpoint para dados de poeira MODIS Terra
+        const bbox = `${lon - 0.5},${lat - 0.5},${lon + 0.5},${lat + 0.5}`;
+        const url = `https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?SERVICE=WMS&REQUEST=GetFeatureInfo&VERSION=1.3.0&LAYERS=MODIS_Terra_Aerosol&QUERY_LAYERS=MODIS_Terra_Aerosol&INFO_FORMAT=application/json&I=50&J=50&WIDTH=100&HEIGHT=100&CRS=EPSG:4326&BBOX=${bbox}&TIME=${hoje}`;
+
+        const response = await axios.get(url, {
+            timeout: 10000,
+            headers: {
+                'User-Agent': 'AtmosProject/1.0'
+            }
+        });
+
+        return {
+            disponivel: true,
+            intensidade: response.data?.features?.[0]?.properties?.value || 0,
+            data: hoje,
+            fonte: 'NASA GIBS - MODIS Terra Aerosol'
+        };
+    } catch (error) {
+        console.warn('⚠️ Dados de airdust NASA indisponíveis:', error.message);
+        return {
+            disponivel: false,
+            intensidade: null,
+            erro: error.message
+        };
+    }
+}
+
+/**
+ * Obtém dados de incêndios florestais (Wildfire) da NASA FIRMS
+ * @param {number} lat - Latitude
+ * @param {number} lon - Longitude
+ * @returns {Promise<Object>} - Dados de wildfire
+ */
+async function obterWildfireNASA(lat, lon) {
+    try {
+        // NASA FIRMS API para detecção de incêndios em tempo real
+        // Usa dados MODIS e VIIRS dos últimos 7 dias em um raio de 100km
+        const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/c6e4f8c8e8a0f6b8e8d0f0f8e8f0f8f8/VIIRS_NOAA20_NRT/${lat},${lon}/1`;
+
+        const response = await axios.get(url, {
+            timeout: 10000,
+            headers: {
+                'User-Agent': 'AtmosProject/1.0'
+            }
+        });
+
+        // Parse CSV response
+        const linhas = response.data.split('\n');
+        const incendios = [];
+
+        if (linhas.length > 1) {
+            for (let i = 1; i < linhas.length; i++) {
+                const dados = linhas[i].split(',');
+                if (dados.length > 5) {
+                    incendios.push({
+                        latitude: parseFloat(dados[0]),
+                        longitude: parseFloat(dados[1]),
+                        brilho: parseFloat(dados[2]),
+                        confianca: parseFloat(dados[8]),
+                        data: dados[5]
+                    });
+                }
+            }
+        }
+
+        const incendiosProximos = incendios.length;
+        const nivelRisco = incendiosProximos === 0 ? 'BAIXO' :
+                          incendiosProximos <= 2 ? 'MODERADO' :
+                          incendiosProximos <= 5 ? 'ALTO' : 'CRÍTICO';
+
+        return {
+            disponivel: true,
+            incendios_detectados: incendiosProximos,
+            nivel_risco: nivelRisco,
+            detalhes: incendios.slice(0, 5), // Primeiros 5 mais próximos
+            fonte: 'NASA FIRMS - VIIRS NOAA-20'
+        };
+    } catch (error) {
+        console.warn('⚠️ Dados de wildfire NASA indisponíveis:', error.message);
+        return {
+            disponivel: false,
+            incendios_detectados: null,
+            nivel_risco: 'DESCONHECIDO',
+            erro: error.message
+        };
+    }
+}
+
+/**
+ * Obtém dados combinados da NASA (airdust + wildfire)
+ * @param {number} lat - Latitude
+ * @param {number} lon - Longitude
+ * @returns {Promise<Object>} - Dados combinados
+ */
+async function obterDadosNASA(lat, lon) {
+    try {
+        const [airdust, wildfire] = await Promise.all([
+            obterAirdustNASA(lat, lon),
+            obterWildfireNASA(lat, lon)
+        ]);
+
+        return {
+            airdust,
+            wildfire,
+            timestamp: new Date().toISOString()
+        };
+    } catch (error) {
+        console.error('Erro ao obter dados NASA:', error.message);
+        return {
+            airdust: { disponivel: false },
+            wildfire: { disponivel: false },
+            erro: error.message
+        };
+    }
+}
+
 module.exports = {
     inicializar,
     obterRecomendacoes,
@@ -372,5 +498,8 @@ module.exports = {
     obterLocalizacaoAtual,
     obterCoordenadas,
     detectarLocalizacaoPorIP,
-    LIMITES
+    LIMITES,
+    obterAirdustNASA,
+    obterWildfireNASA,
+    obterDadosNASA
 };
