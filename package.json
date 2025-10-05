@@ -5,12 +5,15 @@
   "scripts": {
     "devStart": "nodemon app.js",
     "start": "node ./bin/www",
-    "dev": "nodemon ./bin/www"
+    "dev": "nodemon ./bin/www",
+    "background": "node background.js",
+    "background:dev": "nodemon background.js"
   },
   "dependencies": {
     "axios": "^1.12.2",
     "cookie-parser": "~1.4.4",
     "debug": "~2.6.9",
+    "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "http-errors": "~1.6.3",
     "morgan": "^1.10.1",

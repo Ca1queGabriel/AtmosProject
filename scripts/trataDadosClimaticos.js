@@ -234,10 +234,11 @@ function calcularRecomendacoes(dados) {
         umidade_atual: ultimaUmidade,
         previsoes_por_poluente: previsoesPoluentes,
         recomendacoes: {
+            tempo_categoria: tempo_categoria,
             fechar_janelas: ultimo.PM25 > LIMITES.PM25 || ultimo.NO2 > LIMITES.NO2,
             ativar_purificador: ultimo.PM25 > 35 || ultimo.O3 > 70,
             usar_mascaras: ultimo.PM25 > 55 || ultimo.CO > LIMITES.CO,
-            'se_hidratar/Controlar_humidade': (ultimaUmidade < LIMITES.UMIDADE_MIN || ultimaUmidade > LIMITES.UMIDADE_MAX) || (nivel_alerta === 'CRÍTICO' || nivel_alerta === 'ALTO')
+            se_hidratar_Controlar_humidade: (ultimaUmidade < LIMITES.UMIDADE_MIN || ultimaUmidade > LIMITES.UMIDADE_MAX) || (nivel_alerta === 'CRÍTICO' || nivel_alerta === 'ALTO')
         }
     };
 }
@@ -327,12 +328,17 @@ function obterRecomendacoes() {
 
 /**
  * Inicializa o sistema de monitoramento
+ * @param {number} intervaloMs - Intervalo em milissegundos para atualizar dados (padrão: 10 minutos)
  */
-async function inicializar() {
+async function inicializar(intervaloMs = 10 * 60 * 1000) {
     console.log('Iniciando sistema de monitoramento de qualidade do ar...');
-    atualizarRecomendacoes();
-    // Atualiza a cada 10 minutos
-    setInterval(atualizarRecomendacoes, 10 * 60 * 1000);
+    console.log(`Intervalo de atualização: ${intervaloMs}ms (${Math.round(intervaloMs / 1000 / 60)} minutos)`);
+
+    // Primeira atualização imediata
+    await atualizarRecomendacoes();
+
+    // Atualiza periodicamente
+    setInterval(atualizarRecomendacoes, intervaloMs);
 }
 
 module.exports = {
