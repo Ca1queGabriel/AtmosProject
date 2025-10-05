@@ -1,7 +1,6 @@
 console.log("Peixe");
 var createError = require('http-errors');
 var express = require('express');
-var climaRouter = require('./routes/clima');
 var path = require('path');
 const axios = require('axios');
 
@@ -9,7 +8,7 @@ var cookieParser = require('cookie-parser');
 var logger = require('morgan');
 var app = express();
 var indexRouter = require('./routes/index');
-var usersRouter = require('./routes/users');
+const apiRouter = require('./routes/api'); // Adiciona o router da API
 const trataDados = require('./scripts/trataDadosClimaticos');
 const arduino = require('./arduino/arduino');
 
@@ -17,16 +16,15 @@ const arduino = require('./arduino/arduino');
 trataDados.inicializar();
 
 
-app.use('/clima', climaRouter);
 
 // Rota para status do Arduino
-app.get('/arduino-status', (req, res) => {
+/*app.get('/arduino-status', (req, res) => {
     const dados = arduino.obterDados();
     res.json({
         conectado: dados !== null,
         ultima_leitura: dados
     });
-});
+}); */
 
 app.get("/teste", (req, res) => {
     res.render('index');
@@ -93,7 +91,7 @@ app.use(cookieParser());
 
 
 app.use(express.static(path.join(__dirname, 'public')));
-app.use('/users', usersRouter);
+app.use('/api', apiRouter); // Adiciona as rotas da API
 app.use('/', indexRouter);
 
 // catch 404 and forward to error handler

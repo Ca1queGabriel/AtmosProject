@@ -1,5 +1,6 @@
 const axios = require('axios');
 const arduino = require('../arduino/arduino');
+const os = require('os');
 
 const LIMITES = {
     PM25: 15,  // µg/m³
@@ -26,6 +27,22 @@ const PASSWORD = process.env.METEOMATICS_PASS || 'py01s7YnAEAc14VEM952';
 let localizacaoAtual = null;
 
 /**
+ * Função para obter o IP local da máquina
+ * @returns {string} - Endereço IP local ou 'desconhecido'
+ */
+function getLocalIp() {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name]) {
+            if (iface.family === 'IPv4' && !iface.internal) {
+                return iface.address;
+            }
+        }
+    }
+    return 'desconhecido';
+}
+
+/**
  * Detecta automaticamente a localização do usuário usando API de geolocalização por IP
  * @returns {Promise<Object>} - {nome, lat, lon, cidade, pais, ip}
  */
@@ -36,35 +53,55 @@ async function detectarLocalizacaoPorIP() {
             timeout: 5000
         });
 
-        if (response.data) {
+        if (response.data && response.data.ip) {
             const dados = response.data;
             return {
                 nome: `${dados.city}, ${dados.region}, ${dados.country_name}`,
-                lat: dados.latitude.toString(),
-                lon: dados.longitude.toString(),
+                lat: dados.latitude?.toString() || '',
+                lon: dados.longitude?.toString() || '',
                 cidade: dados.city,
                 regiao: dados.region,
                 pais: dados.country_name,
                 codigo_pais: dados.country_code,
-                ip: dados.ip
+                ip: dados.ip,
+                ip_local: getLocalIp()
             };
         } else {
-            throw new Error('Não foi possível obter dados de localização');
+            throw new Error('Não foi possível obter dados de localização do ipapi.co');
         }
     } catch (error) {
-        console.error('Erro ao detectar localização por IP:', error.message);
-        // Fallback para São Paulo caso falhe
-        console.warn('⚠️ Usando localização padrão (São Paulo)');
-        return {
-            nome: 'São Paulo, SP, Brasil',
-            lat: '-23.5505',
-            lon: '-46.6333',
-            cidade: 'São Paulo',
-            regiao: 'SP',
-            pais: 'Brasil',
-            codigo_pais: 'BR',
-            ip: 'desconhecido'
-        };
+        console.error('Erro ao detectar localização por IP (ipapi.co):', error.message);
+        // Tenta obter IP por outra API
+        try {
+            const ipRes = await axios.get('https://api.ipify.org?format=json', { timeout: 5000 });
+            const ip = ipRes.data?.ip || 'desconhecido';
+            console.warn('⚠️ Usando fallback de IP (api.ipify.org)');
+            return {
+                nome: 'São Paulo, SP, Brasil',
+                lat: '-23.5505',
+                lon: '-46.6333',
+                cidade: 'São Paulo',
+                regiao: 'SP',
+                pais: 'Brasil',
+                codigo_pais: 'BR',
+                ip: ip,
+                ip_local: getLocalIp()
+            };
+        } catch (ipError) {
+            console.error('Erro ao obter IP alternativo:', ipError.message);
+            // Fallback para São Paulo caso tudo falhe
+            return {
+                nome: 'São Paulo, SP, Brasil',
+                lat: '-23.5505',
+                lon: '-46.6333',
+                cidade: 'São Paulo',
+                regiao: 'SP',
+                pais: 'Brasil',
+                codigo_pais: 'BR',
+                ip: 'desconhecido',
+                ip_local: getLocalIp()
+            };
+        }
     }
 }
 
@@ -277,7 +314,8 @@ function calcularRecomendacoes(dados) {
             fechar_janelas: ultimo.PM25 > LIMITES.PM25 || ultimo.NO2 > LIMITES.NO2,
             ativar_purificador: ultimo.PM25 > 35 || ultimo.O3 > 70,
             usar_mascaras: ultimo.PM25 > 55 || ultimo.CO > LIMITES.CO,
-            'se_hidratar-Controlar_humidade': (ultimaUmidade < LIMITES.UMIDADE_MIN || ultimaUmidade > LIMITES.UMIDADE_MAX) || (nivel_alerta === 'CRÍTICO' || nivel_alerta === 'ALTO')
+            se_hidratar_Controlar_humidade: (ultimaUmidade < LIMITES.UMIDADE_MIN || ultimaUmidade > LIMITES.UMIDADE_MAX) || (nivel_alerta === 'CRÍTICO' || nivel_alerta === 'ALTO'),
+            tempo_categoria: tempo_categoria
         }
     };
 }
@@ -296,11 +334,18 @@ async function atualizarRecomendacoes() {
             console.log(`   IP: ${localizacaoAtual.ip}`);
         }
 
-        const dadosArduino = arduino.obterDados();
-
+        let dadosArduino = arduino.obterDados();
+        // Se não houver dados do Arduino, usa mock para teste
         if (!dadosArduino) {
-            console.warn('⏳ Aguardando dados do Arduino...');
-            return;
+            console.warn('⏳ Arduino não conectado, usando dados simulados para teste.');
+            dadosArduino = {
+                timestamp: new Date().toISOString(),
+                pm25: 22,
+                no2: 110,
+                o3: 85,
+                co: 6,
+                umidade: 52
+            };
         }
 
         // Monta estrutura compatível com calcularRecomendacoes
@@ -363,14 +408,40 @@ async function inicializar() {
     }, 3000);
 }
 
+/**
+ * Consulta dados da API Meteomatics usando autenticação básica
+ * @param {string} endpoint - Endpoint da API Meteomatics
+ * @param {Object} params - Parâmetros da requisição
+ * @returns {Promise<Object>} - Dados retornados pela API
+ */
+async function consultarMeteomatics(endpoint, params = {}) {
+    const baseUrl = 'https://api.meteomatics.com';
+    const url = `${baseUrl}${endpoint}`;
+    const auth = Buffer.from(`${lima_caique}:${py01s7YnAEAc14VEM952}`).toString('base64');
+    try {
+        const response = await axios.get(url, {
+            params,
+            headers: {
+                Authorization: `Basic ${auth}`
+            },
+            timeout: 10000
+        });
+        return response.data;
+    } catch (error) {
+        if (error.response && error.response.status === 401) {
+            throw new Error('Autenticação falhou na API Meteomatics. Verifique USERNAME e PASSWORD.');
+        }
+        throw new Error('Erro ao consultar Meteomatics: ' + error.message);
+    }
+}
+
 module.exports = {
     inicializar,
     obterRecomendacoes,
     calcularRecomendacoes,
     calcularHoraPico,
     definirLocalizacao,
-    obterLocalizacaoAtual,
-    obterCoordenadas,
-    detectarLocalizacaoPorIP,
-    LIMITES
+    atualizarRecomendacoes,
+    obterLocalizacaoAtual, // Exporta a função para uso externo
+    consultarMeteomatics,
 };
